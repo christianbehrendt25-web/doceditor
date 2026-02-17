@@ -1,28 +1,13 @@
 import os
 
-from flask import Blueprint, jsonify, request, render_template, send_file, abort
+from flask import Blueprint, jsonify, request, send_file
 
 from models.file_manager import FileManager
 
 files_bp = Blueprint("files", __name__)
 
 
-@files_bp.route("/")
-def index():
-    return render_template("index.html")
-
-
-@files_bp.route("/view/<file_id>")
-def view_file(file_id):
-    info = FileManager.get_file_info(file_id)
-    if not info:
-        abort(404)
-    if info["file_type"] == "pdf":
-        return render_template("pdf_viewer.html", file=info)
-    return render_template("image_editor.html", file=info)
-
-
-# --- API ---
+# --- API only (no template rendering) ---
 
 @files_bp.route("/api/files", methods=["GET"])
 def api_list_files():
@@ -38,7 +23,7 @@ def api_upload():
         return jsonify({"error": "Empty filename"}), 400
     user = request.form.get("user", "anonymous")
     try:
-        meta = FileManager.upload(f, user)
+        meta = FileManager.upload(f.filename, f.stream, user)
         return jsonify(meta), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

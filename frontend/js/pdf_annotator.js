@@ -1,32 +1,73 @@
 // Fabric.js overlay for PDF annotation
-document.addEventListener('DOMContentLoaded', () => {
+(function () {
     let fabricCanvas = null;
     let currentTool = 'select';
+    let listenersAttached = false;
 
-    window.onPdfPageRendered = function(width, height) {
-        if (fabricCanvas) {
-            fabricCanvas.dispose();
-        }
-        fabricCanvas = new fabric.Canvas('annotation-canvas', {
-            width: width,
-            height: height,
-            isDrawingMode: false,
-            selection: true,
-        });
-        fabricCanvas.freeDrawingBrush.color = document.getElementById('anno-color').value;
-        fabricCanvas.freeDrawingBrush.width = parseInt(document.getElementById('anno-stroke').value) || 2;
-        setTool(currentTool);
-    };
+    window.initPdfAnnotator = function () {
+        currentTool = 'select';
+        if (fabricCanvas) { fabricCanvas.dispose(); fabricCanvas = null; }
 
-    // Tool buttons
-    document.querySelectorAll('#annotation-toolbar [data-tool]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('#annotation-toolbar [data-tool]').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentTool = btn.dataset.tool;
+        window.onPdfPageRendered = function (width, height) {
+            if (fabricCanvas) {
+                fabricCanvas.dispose();
+            }
+            fabricCanvas = new fabric.Canvas('annotation-canvas', {
+                width: width,
+                height: height,
+                isDrawingMode: false,
+                selection: true,
+            });
+            fabricCanvas.freeDrawingBrush.color = document.getElementById('anno-color').value;
+            fabricCanvas.freeDrawingBrush.width = parseInt(document.getElementById('anno-stroke').value) || 2;
             setTool(currentTool);
-        });
-    });
+        };
+
+        if (!listenersAttached) {
+            listenersAttached = true;
+
+            document.querySelectorAll('#annotation-toolbar [data-tool]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#annotation-toolbar [data-tool]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentTool = btn.dataset.tool;
+                    setTool(currentTool);
+                });
+            });
+
+            document.getElementById('anno-color').addEventListener('input', (e) => {
+                if (fabricCanvas) fabricCanvas.freeDrawingBrush.color = e.target.value;
+            });
+            document.getElementById('anno-stroke').addEventListener('input', (e) => {
+                if (fabricCanvas) fabricCanvas.freeDrawingBrush.width = parseInt(e.target.value) || 2;
+            });
+
+            document.getElementById('clear-annotations').addEventListener('click', () => {
+                if (fabricCanvas) fabricCanvas.clear();
+            });
+
+            document.getElementById('save-annotations').addEventListener('click', () => {
+                if (!fabricCanvas || fabricCanvas.getObjects().length === 0) {
+                    alert('Keine Annotationen vorhanden');
+                    return;
+                }
+                const dataUrl = fabricCanvas.toDataURL({ format: 'png' });
+                const page = window.currentPdfPage() - 1;
+                fetch(API_BASE + `/api/pdf/${FILE_ID}/annotate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page: page, overlay: dataUrl }),
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { alert(data.error); return; }
+                    fabricCanvas.clear();
+                    window.reloadPdf();
+                    if (window.refreshVersions) window.refreshVersions();
+                });
+            });
+        }
+    };
 
     function setTool(tool) {
         if (!fabricCanvas) return;
@@ -50,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 fabricCanvas.add(text);
                 fabricCanvas.setActiveObject(text);
-                // Switch back to select
                 document.querySelector('#annotation-toolbar [data-tool="select"]').click();
             });
         }
@@ -98,39 +138,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         fabricCanvas.on('mouse:up', () => { isDrawing = false; });
     }
-
-    // Color & stroke change
-    document.getElementById('anno-color').addEventListener('input', (e) => {
-        if (fabricCanvas) fabricCanvas.freeDrawingBrush.color = e.target.value;
-    });
-    document.getElementById('anno-stroke').addEventListener('input', (e) => {
-        if (fabricCanvas) fabricCanvas.freeDrawingBrush.width = parseInt(e.target.value) || 2;
-    });
-
-    // Clear
-    document.getElementById('clear-annotations').addEventListener('click', () => {
-        if (fabricCanvas) fabricCanvas.clear();
-    });
-
-    // Save annotations as PNG overlay
-    document.getElementById('save-annotations').addEventListener('click', () => {
-        if (!fabricCanvas || fabricCanvas.getObjects().length === 0) {
-            alert('Keine Annotationen vorhanden');
-            return;
-        }
-        const dataUrl = fabricCanvas.toDataURL({ format: 'png' });
-        const page = window.currentPdfPage() - 1;
-        fetch(`/api/pdf/${FILE_ID}/annotate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ page: page, overlay: dataUrl }),
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) { alert(data.error); return; }
-            fabricCanvas.clear();
-            window.reloadPdf();
-            if (window.refreshVersions) window.refreshVersions();
-        });
-    });
-});
+})();

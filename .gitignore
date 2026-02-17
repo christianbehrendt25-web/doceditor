@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+
+# Legacy storage (old flat structure)
 storage/originals/*
 storage/versions/*
 storage/metadata/*
@@ -10,3 +12,13 @@ storage/audit_log.jsonl
 !storage/originals/.gitkeep
 !storage/versions/.gitkeep
 !storage/metadata/.gitkeep
+
+# Backend-python storage
+backend-python/storage/originals/*
+backend-python/storage/versions/*
+backend-python/storage/metadata/*
+backend-python/storage/audit_log.jsonl
+!backend-python/storage/.gitkeep
+!backend-python/storage/originals/.gitkeep
+!backend-python/storage/versions/.gitkeep
+!backend-python/storage/metadata/.gitkeep

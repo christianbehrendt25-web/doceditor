@@ -1,5 +1,7 @@
 import os
+import shutil
 import uuid
+from typing import BinaryIO
 
 import config
 from models.audit_logger import AuditLogger
@@ -12,8 +14,14 @@ class FileManager:
     # --- File operations ---
 
     @staticmethod
-    def upload(file_storage, user: str = "anonymous") -> dict:
-        filename = file_storage.filename
+    def upload(filename: str, stream: BinaryIO, user: str = "anonymous") -> dict:
+        """Upload a file from a filename and binary stream (framework-agnostic).
+
+        Args:
+            filename: Original filename (e.g. "document.pdf")
+            stream: Binary stream with file contents
+            user: Username for audit log
+        """
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
         if ext not in config.ALL_ALLOWED:
             raise ValueError(f"File type .{ext} not allowed")
@@ -21,7 +29,8 @@ class FileManager:
         file_type = "pdf" if ext == "pdf" else "image"
         file_id = uuid.uuid4().hex[:12]
         dest = os.path.join(config.ORIGINALS_DIR, f"{file_id}.{ext}")
-        file_storage.save(dest)
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(stream, f)
 
         meta = VersionStore.create_metadata(file_id, filename, file_type, ext)
         AuditLogger.log("upload", file_id, user, {"original_name": filename})
@@ -84,8 +93,6 @@ class FileManager:
                 raise ValueError(f"File not found: {fid}")
             paths.append(p)
         result = PdfProcessor.merge(paths)
-        # Create a new file entry for the merged PDF
-        import shutil
         new_id = uuid.uuid4().hex[:12]
         dest = os.path.join(config.ORIGINALS_DIR, f"{new_id}.pdf")
         shutil.move(result, dest)

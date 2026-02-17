@@ -1,10 +1,17 @@
 // Shared version sidebar panel
-document.addEventListener('DOMContentLoaded', () => {
-    const panel = document.getElementById('version-panel');
-    if (!panel) return;
+(function () {
+    let currentPanelId = null;
+
+    window.initVersionPanel = function (panelElementId) {
+        currentPanelId = panelElementId;
+        refreshVersions();
+    };
 
     function refreshVersions() {
-        fetch(`/api/files/${FILE_ID}/versions`)
+        const panel = document.getElementById(currentPanelId);
+        if (!panel || !FILE_ID) return;
+
+        fetch(API_BASE + `/api/files/${FILE_ID}/versions`)
             .then(r => r.json())
             .then(versions => {
                 let html = '<div class="card"><div class="card-body">';
@@ -20,14 +27,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <small class="text-muted">${v.action}</small>
                         <div class="mt-1">
-                            <a href="/api/files/${FILE_ID}/download/${v.version}" class="btn btn-outline-primary btn-sm" title="Download"><i class="bi bi-download"></i></a>
+                            <a href="${API_BASE}/api/files/${FILE_ID}/download/${v.version}" class="btn btn-outline-primary btn-sm" title="Download"><i class="bi bi-download"></i></a>
                             ${!isCurrent ? `<button class="btn btn-outline-warning btn-sm revert-btn" data-version="${v.version}" title="Wiederherstellen"><i class="bi bi-arrow-counterclockwise"></i></button>` : ''}
                         </div>
                     </div>`;
                 });
                 html += '</div></div></div>';
 
-                // Audit log section
                 html += '<div class="card mt-3"><div class="card-body">';
                 html += '<h5 class="card-title">Audit-Log</h5>';
                 html += '<div id="audit-entries" class="small" style="max-height:300px;overflow-y:auto;"></div>';
@@ -35,32 +41,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 panel.innerHTML = html;
 
-                // Revert buttons
                 panel.querySelectorAll('.revert-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const version = parseInt(btn.dataset.version);
                         if (!confirm(`Auf Version ${version} zuruecksetzen?`)) return;
-                        fetch(`/api/files/${FILE_ID}/revert/${version}`, {
+                        fetch(API_BASE + `/api/files/${FILE_ID}/revert/${version}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({}),
                         }).then(r => r.json()).then(data => {
                             if (data.error) { alert(data.error); return; }
                             refreshVersions();
-                            // Reload content
                             if (window.reloadPdf) window.reloadPdf();
-                            else location.reload();
+                            else if (window.initImageEditor) window.initImageEditor();
                         });
                     });
                 });
 
-                // Load audit entries
                 loadAudit();
             });
     }
 
     function loadAudit() {
-        fetch(`/api/audit-log?file_id=${FILE_ID}&limit=20`)
+        fetch(API_BASE + `/api/audit-log?file_id=${FILE_ID}&limit=20`)
             .then(r => r.json())
             .then(entries => {
                 const container = document.getElementById('audit-entries');
@@ -73,5 +76,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.refreshVersions = refreshVersions;
-    refreshVersions();
-});
+})();

@@ -1,0 +1,740 @@
+openapi: 3.0.3
+info:
+  title: DocEditor API
+  description: Non-destructive PDF and image editor with full version history.
+  version: 1.0.0
+
+servers:
+  - url: /
+    description: Same-origin (default)
+  - url: http://localhost:5000
+    description: Local development
+
+paths:
+  /api/files:
+    get:
+      summary: List all files
+      operationId: listFiles
+      tags: [Files]
+      responses:
+        "200":
+          description: Array of file metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileMeta"
+
+  /api/files/upload:
+    post:
+      summary: Upload a file
+      operationId: uploadFile
+      tags: [Files]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileMeta"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/files/{fileId}:
+    get:
+      summary: Get file metadata
+      operationId: getFile
+      tags: [Files]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      responses:
+        "200":
+          description: File metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileMeta"
+        "404":
+          $ref: "#/components/responses/Error404"
+    delete:
+      summary: Delete a file
+      operationId: deleteFile
+      tags: [Files]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+        - name: user
+          in: query
+          schema:
+            type: string
+            default: anonymous
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/files/{fileId}/download:
+    get:
+      summary: Download file (latest version)
+      operationId: downloadFile
+      tags: [Files]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      responses:
+        "200":
+          description: File binary
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /api/files/{fileId}/download/{version}:
+    get:
+      summary: Download specific version
+      operationId: downloadFileVersion
+      tags: [Files]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: File binary
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /api/files/{fileId}/versions:
+    get:
+      summary: List version history
+      operationId: listVersions
+      tags: [Versions]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      responses:
+        "200":
+          description: Array of version entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VersionEntry"
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /api/files/{fileId}/revert/{version}:
+    post:
+      summary: Revert to a specific version
+      operationId: revertVersion
+      tags: [Versions]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/audit-log:
+    get:
+      summary: Get audit log entries
+      operationId: getAuditLog
+      tags: [Versions]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: file_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEntry"
+
+  /api/pdf/{fileId}/serve:
+    get:
+      summary: Serve PDF for viewing
+      operationId: servePdf
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+        - name: version
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PDF binary
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /api/pdf/{fileId}/page-count:
+    get:
+      summary: Get PDF page count
+      operationId: getPdfPageCount
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      responses:
+        "200":
+          description: Page count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  page_count:
+                    type: integer
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /api/pdf/{fileId}/rotate-page:
+    post:
+      summary: Rotate a PDF page
+      operationId: rotatePdfPage
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [page]
+              properties:
+                page:
+                  type: integer
+                  description: 0-based page index
+                angle:
+                  type: integer
+                  default: 90
+                  enum: [90, 180, 270]
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/pdf/{fileId}/delete-page:
+    post:
+      summary: Delete a PDF page
+      operationId: deletePdfPage
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [page]
+              properties:
+                page:
+                  type: integer
+                  description: 0-based page index
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/pdf/{fileId}/reorder-pages:
+    post:
+      summary: Reorder PDF pages
+      operationId: reorderPdfPages
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order]
+              properties:
+                order:
+                  type: array
+                  items:
+                    type: integer
+                  description: New page order as 0-based indices
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/pdf/merge:
+    post:
+      summary: Merge multiple PDFs
+      operationId: mergePdfs
+      tags: [PDF]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_ids]
+              properties:
+                file_ids:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 2
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "201":
+          description: Merged PDF created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileMeta"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/pdf/{fileId}/text-overlay:
+    post:
+      summary: Add text overlay to PDF page
+      operationId: addPdfTextOverlay
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [page, text, x, y]
+              properties:
+                page:
+                  type: integer
+                  description: 0-based page index
+                text:
+                  type: string
+                x:
+                  type: number
+                y:
+                  type: number
+                font_size:
+                  type: number
+                  default: 12
+                font_name:
+                  type: string
+                  default: Helvetica
+                color:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 3
+                  maxItems: 3
+                  default: [0, 0, 0]
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/pdf/{fileId}/annotate:
+    post:
+      summary: Add PNG annotation overlay to PDF page
+      operationId: annotatePdf
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [page, overlay]
+              properties:
+                page:
+                  type: integer
+                  description: 0-based page index
+                overlay:
+                  type: string
+                  description: PNG as data URL (data:image/png;base64,...)
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/image/{fileId}/serve:
+    get:
+      summary: Serve image for viewing
+      operationId: serveImage
+      tags: [Image]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+        - name: version
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Image binary
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /api/image/{fileId}/crop:
+    post:
+      summary: Crop image
+      operationId: cropImage
+      tags: [Image]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [left, top, right, bottom]
+              properties:
+                left:
+                  type: integer
+                top:
+                  type: integer
+                right:
+                  type: integer
+                bottom:
+                  type: integer
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/image/{fileId}/resize:
+    post:
+      summary: Resize image
+      operationId: resizeImage
+      tags: [Image]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [width, height]
+              properties:
+                width:
+                  type: integer
+                height:
+                  type: integer
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/image/{fileId}/rotate:
+    post:
+      summary: Rotate image
+      operationId: rotateImage
+      tags: [Image]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                angle:
+                  type: number
+                  default: 90
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/image/{fileId}/adjust:
+    post:
+      summary: Adjust brightness, contrast, saturation
+      operationId: adjustImage
+      tags: [Image]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brightness:
+                  type: number
+                  default: 1.0
+                contrast:
+                  type: number
+                  default: 1.0
+                saturation:
+                  type: number
+                  default: 1.0
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+  /api/image/{fileId}/annotate:
+    post:
+      summary: Composite PNG annotation overlay onto image
+      operationId: annotateImage
+      tags: [Image]
+      parameters:
+        - $ref: "#/components/parameters/fileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [overlay]
+              properties:
+                overlay:
+                  type: string
+                  description: PNG as data URL (data:image/png;base64,...)
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
+components:
+  parameters:
+    fileId:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique file identifier (12-char hex)
+
+  responses:
+    Error400:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Error404:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    FileMeta:
+      type: object
+      properties:
+        file_id:
+          type: string
+        original_name:
+          type: string
+        file_type:
+          type: string
+          enum: [pdf, image]
+        ext:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        current_version:
+          type: integer
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/VersionEntry"
+
+    VersionEntry:
+      type: object
+      properties:
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        action:
+          type: string
+        details:
+          type: object
+
+    VersionResult:
+      type: object
+      properties:
+        version:
+          type: integer
+
+    AuditEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        user:
+          type: string
+        action:
+          type: string
+        file_id:
+          type: string
+        details:
+          type: object
