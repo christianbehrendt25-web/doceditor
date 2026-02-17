@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+storage/originals/*
+storage/versions/*
+storage/metadata/*
+storage/audit_log.jsonl
+!storage/.gitkeep
+!storage/originals/.gitkeep
+!storage/versions/.gitkeep
+!storage/metadata/.gitkeep
