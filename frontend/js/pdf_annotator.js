@@ -23,6 +23,15 @@
             setTool(currentTool);
         };
 
+        // Allow text-overlay placement to pass through Fabric canvas
+        window._setAnnotationPassthrough = function (enabled) {
+            if (!fabricCanvas) return;
+            const wrapper = fabricCanvas.wrapperEl;
+            if (wrapper) {
+                wrapper.style.pointerEvents = enabled ? 'none' : '';
+            }
+        };
+
         if (!listenersAttached) {
             listenersAttached = true;
 

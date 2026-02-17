@@ -83,20 +83,55 @@
                 });
             });
 
+            // Floating text preview element
+            let textGhost = null;
+
+            function createTextGhost(text, fontSize, color) {
+                if (textGhost) textGhost.remove();
+                textGhost = document.createElement('div');
+                textGhost.textContent = text;
+                textGhost.style.cssText = `position:fixed;pointer-events:none;z-index:9999;
+                    font-size:${fontSize}px;color:${color};white-space:nowrap;opacity:0.7;
+                    font-family:Helvetica,Arial,sans-serif;transform:translate(8px,8px);`;
+                document.body.appendChild(textGhost);
+            }
+
+            function moveTextGhost(e) {
+                if (textGhost) {
+                    textGhost.style.left = e.clientX + 'px';
+                    textGhost.style.top = e.clientY + 'px';
+                }
+            }
+
+            function removeTextGhost() {
+                if (textGhost) { textGhost.remove(); textGhost = null; }
+                document.removeEventListener('mousemove', moveTextGhost);
+            }
+
             document.getElementById('place-text-overlay').addEventListener('click', () => {
                 const text = document.getElementById('text-overlay-input').value.trim();
                 if (!text) { alert('Bitte Text eingeben'); return; }
                 placingText = true;
-                pdfCanvas.style.cursor = 'crosshair';
+                document.getElementById('pdf-container').style.cursor = 'none';
+                if (window._setAnnotationPassthrough) window._setAnnotationPassthrough(true);
+                const fontSize = parseInt(document.getElementById('text-overlay-size').value) || 14;
+                const color = document.getElementById('anno-color').value;
+                createTextGhost(text, fontSize, color);
+                document.addEventListener('mousemove', moveTextGhost);
             });
 
-            pdfCanvas.addEventListener('click', (e) => {
+            // Listen on pdf-container (captures clicks on Fabric upper-canvas too)
+            document.getElementById('pdf-container').addEventListener('click', (e) => {
                 if (!placingText) return;
                 placingText = false;
-                pdfCanvas.style.cursor = 'default';
+                document.getElementById('pdf-container').style.cursor = '';
+                if (window._setAnnotationPassthrough) window._setAnnotationPassthrough(false);
+                removeTextGhost();
                 const rect = pdfCanvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                // Scale from canvas pixels to PDF points
+                const scaleX = pdfCanvas.width / rect.width;
+                const x = (e.clientX - rect.left) * scaleX / currentScale;
+                const y = (e.clientY - rect.top) * scaleX / currentScale;
                 const text = document.getElementById('text-overlay-input').value.trim();
                 const fontSize = parseInt(document.getElementById('text-overlay-size').value) || 14;
                 const color = hexToRgb(document.getElementById('anno-color').value);
