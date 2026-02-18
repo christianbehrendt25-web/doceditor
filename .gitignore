@@ -16,10 +16,14 @@ storage/audit_log.jsonl
 # Backend-python storage
 backend-python/storage/originals/*
 backend-python/storage/versions/*
+backend-python/storage/current/*
+backend-python/storage/annotations/*
 backend-python/storage/metadata/*
 backend-python/storage/audit_log.jsonl
 backend-python/storage/*.db
 !backend-python/storage/.gitkeep
 !backend-python/storage/originals/.gitkeep
 !backend-python/storage/versions/.gitkeep
+!backend-python/storage/current/.gitkeep
+!backend-python/storage/annotations/.gitkeep
 !backend-python/storage/metadata/.gitkeep
