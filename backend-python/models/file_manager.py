@@ -119,7 +119,7 @@ class FileManager:
                     deskew=enhance_options.get("deskew", True),
                     sharpen=enhance_options.get("sharpen", True),
                     contrast=enhance_options.get("contrast", True),
-                    threshold=enhance_options.get("threshold", False),
+                    threshold=enhance_options.get("threshold", True),
                 )
                 enhanced_paths.append(enhanced)
 
