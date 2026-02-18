@@ -1,6 +1,8 @@
 // File browser: upload, list, merge
 (function () {
     let initialized = false;
+    let mergeIds = [];
+    let photoPdfIds = [];
 
     window.initFileBrowser = function () {
         const fileList = document.getElementById('file-list');
@@ -10,8 +12,6 @@
         const mergeSelection = document.getElementById('merge-selection');
         const photoPdfBtn = document.getElementById('photo-pdf-btn');
         const photoPdfSelection = document.getElementById('photo-pdf-selection');
-        let mergeIds = [];
-        let photoPdfIds = [];
 
         if (!initialized) {
             initialized = true;

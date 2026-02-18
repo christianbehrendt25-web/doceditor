@@ -102,6 +102,17 @@ def photo_to_pdf():
         return jsonify({"error": str(e)}), 400
 
 
+@pdf_bp.route("/api/pdf/<file_id>/enhance", methods=["POST"])
+def enhance_pdf(file_id):
+    data = request.get_json() or {}
+    user = data.get("user", "anonymous")
+    try:
+        v = FileManager.pdf_enhance(file_id, data.get("enhance", {}), user)
+        return jsonify({"version": v})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @pdf_bp.route("/api/pdf/<file_id>/annotate", methods=["POST"])
 def annotate_pdf(file_id):
     data = request.get_json()

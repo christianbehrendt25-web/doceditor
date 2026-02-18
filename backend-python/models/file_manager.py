@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 import uuid
 from typing import BinaryIO
 
@@ -131,6 +132,47 @@ class FileManager:
             return meta
         finally:
             for p in enhanced_paths:
+                if os.path.exists(p):
+                    os.unlink(p)
+
+    @staticmethod
+    def pdf_enhance(file_id: str, enhance_options: dict | None = None,
+                    user: str = "anonymous") -> int:
+        """Render each PDF page as image, apply enhancement, rebuild as new version."""
+        import fitz
+        if enhance_options is None:
+            enhance_options = {}
+        src = VersionStore.get_latest_version_path(file_id)
+        if not src:
+            raise ValueError(f"File not found: {file_id}")
+        doc = fitz.open(src)
+        tmp_files = []
+        try:
+            enhanced_paths = []
+            for page in doc:
+                mat = fitz.Matrix(2, 2)  # ~150 dpi
+                pix = page.get_pixmap(matrix=mat)
+                raw = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                raw.close()
+                tmp_files.append(raw.name)
+                pix.save(raw.name)
+                enhanced = ImageEnhancer.enhance(
+                    raw.name,
+                    deskew=enhance_options.get("deskew", True),
+                    sharpen=enhance_options.get("sharpen", True),
+                    contrast=enhance_options.get("contrast", True),
+                    threshold=enhance_options.get("threshold", False),
+                )
+                tmp_files.append(enhanced)
+                enhanced_paths.append(enhanced)
+            result = PdfProcessor.images_to_pdf(enhanced_paths)
+            tmp_files.append(result)
+            v = VersionStore.create_new_version(file_id, result, "pdf_enhance", enhance_options)
+            AuditLogger.log("pdf_enhance", file_id, user, {**enhance_options, "version": v})
+            return v
+        finally:
+            doc.close()
+            for p in tmp_files:
                 if os.path.exists(p):
                     os.unlink(p)
 

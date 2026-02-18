@@ -428,6 +428,47 @@ paths:
         "400":
           $ref: "#/components/responses/Error400"
 
+  /api/pdf/{fileId}/enhance:
+    post:
+      summary: Enhance all pages of a scanned PDF (deskew, sharpen, contrast, threshold)
+      operationId: enhancePdf
+      tags: [PDF]
+      parameters:
+        - $ref: "#/components/parameters/FileId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enhance:
+                  type: object
+                  properties:
+                    deskew:
+                      type: boolean
+                      default: true
+                    sharpen:
+                      type: boolean
+                      default: true
+                    contrast:
+                      type: boolean
+                      default: true
+                    threshold:
+                      type: boolean
+                      default: false
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: New version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+
   /api/pdf/{fileId}/text-overlay:
     post:
       summary: Add text overlay to PDF page

@@ -108,6 +108,34 @@
                 document.removeEventListener('mousemove', moveTextGhost);
             }
 
+            document.getElementById('pdf-enhance-btn').addEventListener('click', () => {
+                const btn = document.getElementById('pdf-enhance-btn');
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Läuft...';
+                const enhance = {
+                    deskew: document.getElementById('pdf-enhance-deskew').checked,
+                    sharpen: document.getElementById('pdf-enhance-sharpen').checked,
+                    contrast: document.getElementById('pdf-enhance-contrast').checked,
+                    threshold: document.getElementById('pdf-enhance-threshold').checked,
+                };
+                fetch(API_BASE + `/api/pdf/${FILE_ID}/enhance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enhance }),
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { alert(data.error); return; }
+                    loadPdf();
+                    if (window.refreshVersions) window.refreshVersions();
+                })
+                .catch(() => alert('Fehler bei der Verbesserung'))
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-stars"></i> Verbessern';
+                });
+            });
+
             document.getElementById('place-text-overlay').addEventListener('click', () => {
                 const text = document.getElementById('text-overlay-input').value.trim();
                 if (!text) { alert('Bitte Text eingeben'); return; }
