@@ -6,41 +6,43 @@
     let currentScale = 1.5;
     let placingText = false;
     let listenersAttached = false;
+    let pdfCanvas = null;
+    let ctx = null;
+
+    async function loadPdf() {
+        const url = API_BASE + `/api/pdf/${FILE_ID}/serve?t=${Date.now()}`;
+        pdfDoc = await pdfjsLib.getDocument(url).promise;
+        totalPages = pdfDoc.numPages;
+        if (currentPage > totalPages) currentPage = totalPages;
+        await renderPage(currentPage);
+    }
+
+    async function renderPage(num) {
+        const page = await pdfDoc.getPage(num);
+        const viewport = page.getViewport({ scale: currentScale });
+        pdfCanvas.width = viewport.width;
+        pdfCanvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        document.getElementById('page-info').textContent = `Seite ${num} / ${totalPages}`;
+
+        const annoCanvas = document.getElementById('annotation-canvas');
+        annoCanvas.width = viewport.width;
+        annoCanvas.height = viewport.height;
+        annoCanvas.style.width = viewport.width + 'px';
+        annoCanvas.style.height = viewport.height + 'px';
+
+        if (window.onPdfPageRendered) {
+            window.onPdfPageRendered(viewport.width, viewport.height);
+        }
+    }
 
     window.initPdfViewer = function () {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        const pdfCanvas = document.getElementById('pdf-canvas');
-        const ctx = pdfCanvas.getContext('2d');
+        pdfCanvas = document.getElementById('pdf-canvas');
+        ctx = pdfCanvas.getContext('2d');
         currentPage = 1;
         pdfDoc = null;
-
-        async function loadPdf() {
-            const url = API_BASE + `/api/pdf/${FILE_ID}/serve?t=${Date.now()}`;
-            pdfDoc = await pdfjsLib.getDocument(url).promise;
-            totalPages = pdfDoc.numPages;
-            if (currentPage > totalPages) currentPage = totalPages;
-            await renderPage(currentPage);
-        }
-
-        async function renderPage(num) {
-            const page = await pdfDoc.getPage(num);
-            const viewport = page.getViewport({ scale: currentScale });
-            pdfCanvas.width = viewport.width;
-            pdfCanvas.height = viewport.height;
-            await page.render({ canvasContext: ctx, viewport }).promise;
-            document.getElementById('page-info').textContent = `Seite ${num} / ${totalPages}`;
-
-            const annoCanvas = document.getElementById('annotation-canvas');
-            annoCanvas.width = viewport.width;
-            annoCanvas.height = viewport.height;
-            annoCanvas.style.width = viewport.width + 'px';
-            annoCanvas.style.height = viewport.height + 'px';
-
-            if (window.onPdfPageRendered) {
-                window.onPdfPageRendered(viewport.width, viewport.height);
-            }
-        }
 
         if (!listenersAttached) {
             listenersAttached = true;
@@ -83,31 +85,6 @@
                 });
             });
 
-            // Floating text preview element
-            let textGhost = null;
-
-            function createTextGhost(text, fontSize, color) {
-                if (textGhost) textGhost.remove();
-                textGhost = document.createElement('div');
-                textGhost.textContent = text;
-                textGhost.style.cssText = `position:fixed;pointer-events:none;z-index:9999;
-                    font-size:${fontSize}px;color:${color};white-space:nowrap;opacity:0.7;
-                    font-family:Helvetica,Arial,sans-serif;transform:translate(8px,8px);`;
-                document.body.appendChild(textGhost);
-            }
-
-            function moveTextGhost(e) {
-                if (textGhost) {
-                    textGhost.style.left = e.clientX + 'px';
-                    textGhost.style.top = e.clientY + 'px';
-                }
-            }
-
-            function removeTextGhost() {
-                if (textGhost) { textGhost.remove(); textGhost = null; }
-                document.removeEventListener('mousemove', moveTextGhost);
-            }
-
             document.getElementById('pdf-enhance-btn').addEventListener('click', () => {
                 const btn = document.getElementById('pdf-enhance-btn');
                 btn.disabled = true;
@@ -135,6 +112,31 @@
                     btn.innerHTML = '<i class="bi bi-stars"></i> Verbessern';
                 });
             });
+
+            // Floating text preview element
+            let textGhost = null;
+
+            function createTextGhost(text, fontSize, color) {
+                if (textGhost) textGhost.remove();
+                textGhost = document.createElement('div');
+                textGhost.textContent = text;
+                textGhost.style.cssText = `position:fixed;pointer-events:none;z-index:9999;
+                    font-size:${fontSize}px;color:${color};white-space:nowrap;opacity:0.7;
+                    font-family:Helvetica,Arial,sans-serif;transform:translate(8px,8px);`;
+                document.body.appendChild(textGhost);
+            }
+
+            function moveTextGhost(e) {
+                if (textGhost) {
+                    textGhost.style.left = e.clientX + 'px';
+                    textGhost.style.top = e.clientY + 'px';
+                }
+            }
+
+            function removeTextGhost() {
+                if (textGhost) { textGhost.remove(); textGhost = null; }
+                document.removeEventListener('mousemove', moveTextGhost);
+            }
 
             document.getElementById('place-text-overlay').addEventListener('click', () => {
                 const text = document.getElementById('text-overlay-input').value.trim();

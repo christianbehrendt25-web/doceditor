@@ -18,6 +18,13 @@
                 isDrawingMode: false,
                 selection: true,
             });
+            // Fabric.js wraps the canvas in a div, removing its position:absolute.
+            // Restore it so the overlay stays on top of the PDF canvas, not below it.
+            if (fabricCanvas.wrapperEl) {
+                fabricCanvas.wrapperEl.style.position = 'absolute';
+                fabricCanvas.wrapperEl.style.top = '0';
+                fabricCanvas.wrapperEl.style.left = '0';
+            }
             fabricCanvas.freeDrawingBrush.color = document.getElementById('anno-color').value;
             fabricCanvas.freeDrawingBrush.width = parseInt(document.getElementById('anno-stroke').value) || 2;
             setTool(currentTool);
