@@ -104,6 +104,18 @@
                 });
             });
 
+            function updateFilterPreview() {
+                const b = document.getElementById('brightness').value;
+                const c = document.getElementById('contrast').value;
+                const s = document.getElementById('saturation').value;
+                document.getElementById('image-container').style.filter =
+                    `brightness(${b}) contrast(${c}) saturate(${s})`;
+            }
+
+            ['brightness', 'contrast', 'saturation'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateFilterPreview);
+            });
+
             document.getElementById('apply-filters').addEventListener('click', () => {
                 const brightness = parseFloat(document.getElementById('brightness').value);
                 const contrast = parseFloat(document.getElementById('contrast').value);
@@ -117,6 +129,7 @@
                     document.getElementById('brightness').value = 1;
                     document.getElementById('contrast').value = 1;
                     document.getElementById('saturation').value = 1;
+                    document.getElementById('image-container').style.filter = '';
                     loadImage();
                     if (window.refreshVersions) window.refreshVersions();
                 });

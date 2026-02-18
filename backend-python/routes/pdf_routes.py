@@ -1,4 +1,6 @@
+import base64
 import os
+import tempfile
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -102,6 +104,56 @@ def photo_to_pdf():
         return jsonify(meta), 201
     except (KeyError, ValueError) as e:
         return jsonify({"error": str(e)}), 400
+
+
+@pdf_bp.route("/api/pdf/<file_id>/enhance-preview", methods=["POST"])
+def enhance_preview(file_id):
+    """Render one page as before/after PNG without modifying the stored PDF."""
+    import fitz
+    from models.image_enhancer import ImageEnhancer
+
+    data = request.get_json() or {}
+    page_num = int(data.get("page", 0))
+    enhance = data.get("enhance", {})
+
+    path = VersionStore.get_current_path(file_id)
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "Not found"}), 404
+
+    doc = fitz.open(path)
+    if page_num >= len(doc):
+        doc.close()
+        return jsonify({"error": "Page out of range"}), 400
+
+    page = doc[page_num]
+    mat = fitz.Matrix(2, 2)
+    pix = page.get_pixmap(matrix=mat)
+    doc.close()
+
+    orig_b64 = base64.b64encode(pix.tobytes("png")).decode()
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp.close()
+    try:
+        pix.save(tmp.name)
+        enhanced_path = ImageEnhancer.enhance(
+            tmp.name,
+            deskew=enhance.get("deskew", True),
+            sharpen=enhance.get("sharpen", True),
+            contrast=enhance.get("contrast", True),
+            threshold=enhance.get("threshold", False),
+        )
+        with open(enhanced_path, "rb") as f:
+            enh_b64 = base64.b64encode(f.read()).decode()
+        os.unlink(enhanced_path)
+    finally:
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+
+    return jsonify({
+        "original": f"data:image/png;base64,{orig_b64}",
+        "enhanced": f"data:image/png;base64,{enh_b64}",
+    })
 
 
 @pdf_bp.route("/api/pdf/<file_id>/enhance", methods=["POST"])

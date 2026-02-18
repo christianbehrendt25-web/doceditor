@@ -148,9 +148,14 @@
                                     <label class="form-check-label" for="pdf-enhance-threshold">S/W</label>
                                 </div>
                             </div>
-                            <button id="pdf-enhance-btn" class="btn btn-outline-primary btn-sm w-100 mt-2">
-                                <i class="bi bi-stars"></i> Verbessern
-                            </button>
+                            <div class="d-flex gap-1 mt-2">
+                                <button id="pdf-enhance-preview-btn" class="btn btn-outline-secondary btn-sm flex-fill">
+                                    <i class="bi bi-eye"></i> Vorschau
+                                </button>
+                                <button id="pdf-enhance-btn" class="btn btn-outline-primary btn-sm flex-fill">
+                                    <i class="bi bi-stars"></i> Anwenden
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -234,6 +239,42 @@
         </div>
 
     </div>
+    <!-- PDF Enhance Preview Modal -->
+    <div class="modal fade" id="enhancePreviewModal" tabindex="-1" aria-labelledby="enhancePreviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="enhancePreviewModalLabel"><i class="bi bi-stars"></i> Vorschau: Seite verbessern</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="enhance-preview-loading" class="text-center py-4">
+                        <div class="spinner-border" role="status"></div>
+                        <p class="mt-2 text-muted">Vorschau wird berechnet&hellip;</p>
+                    </div>
+                    <div id="enhance-preview-content" style="display:none;">
+                        <div class="row g-3">
+                            <div class="col-6 text-center">
+                                <p class="fw-bold text-muted mb-1">Vorher</p>
+                                <img id="enhance-preview-before" class="img-fluid border rounded" alt="Vorher">
+                            </div>
+                            <div class="col-6 text-center">
+                                <p class="fw-bold text-success mb-1">Nachher</p>
+                                <img id="enhance-preview-after" class="img-fluid border rounded" alt="Nachher">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="button" class="btn btn-primary" id="enhance-preview-apply-btn" disabled>
+                        <i class="bi bi-stars"></i> Anwenden
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/app.js"></script>
     <script src="/js/file_browser.js"></script>

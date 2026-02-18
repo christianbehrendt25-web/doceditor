@@ -85,31 +85,74 @@
                 });
             });
 
-            document.getElementById('pdf-enhance-btn').addEventListener('click', () => {
-                const btn = document.getElementById('pdf-enhance-btn');
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Läuft...';
-                const enhance = {
+            function getEnhanceOptions() {
+                return {
                     deskew: document.getElementById('pdf-enhance-deskew').checked,
                     sharpen: document.getElementById('pdf-enhance-sharpen').checked,
                     contrast: document.getElementById('pdf-enhance-contrast').checked,
                     threshold: document.getElementById('pdf-enhance-threshold').checked,
                 };
+            }
+
+            function applyEnhance() {
+                const btn = document.getElementById('pdf-enhance-btn');
+                const applyBtn = document.getElementById('enhance-preview-apply-btn');
+                btn.disabled = true;
+                applyBtn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
                 fetch(API_BASE + `/api/pdf/${FILE_ID}/enhance`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enhance }),
+                    body: JSON.stringify({ enhance: getEnhanceOptions() }),
                 })
                 .then(r => r.json())
                 .then(data => {
                     if (data.error) { alert(data.error); return; }
+                    bootstrap.Modal.getInstance(document.getElementById('enhancePreviewModal'))?.hide();
                     loadPdf();
                     if (window.refreshVersions) window.refreshVersions();
                 })
                 .catch(() => alert('Fehler bei der Verbesserung'))
                 .finally(() => {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="bi bi-stars"></i> Verbessern';
+                    applyBtn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-stars"></i> Anwenden';
+                });
+            }
+
+            document.getElementById('pdf-enhance-btn').addEventListener('click', applyEnhance);
+
+            document.getElementById('enhance-preview-apply-btn').addEventListener('click', applyEnhance);
+
+            document.getElementById('pdf-enhance-preview-btn').addEventListener('click', () => {
+                const previewBtn = document.getElementById('pdf-enhance-preview-btn');
+                previewBtn.disabled = true;
+                previewBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                const modal = new bootstrap.Modal(document.getElementById('enhancePreviewModal'));
+                document.getElementById('enhance-preview-loading').style.display = '';
+                document.getElementById('enhance-preview-content').style.display = 'none';
+                document.getElementById('enhance-preview-apply-btn').disabled = true;
+                modal.show();
+
+                fetch(API_BASE + `/api/pdf/${FILE_ID}/enhance-preview`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page: currentPage - 1, enhance: getEnhanceOptions() }),
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { alert(data.error); modal.hide(); return; }
+                    document.getElementById('enhance-preview-before').src = data.original;
+                    document.getElementById('enhance-preview-after').src = data.enhanced;
+                    document.getElementById('enhance-preview-loading').style.display = 'none';
+                    document.getElementById('enhance-preview-content').style.display = '';
+                    document.getElementById('enhance-preview-apply-btn').disabled = false;
+                })
+                .catch(() => { alert('Fehler beim Laden der Vorschau'); modal.hide(); })
+                .finally(() => {
+                    previewBtn.disabled = false;
+                    previewBtn.innerHTML = '<i class="bi bi-eye"></i> Vorschau';
                 });
             });
 
