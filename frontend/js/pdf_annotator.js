@@ -1,4 +1,4 @@
-// Fabric.js overlay for PDF annotation
+// Fabric.js overlay for PDF annotation – v2 (annotation store)
 (function () {
     let fabricCanvas = null;
     let currentTool = 'select';
@@ -18,8 +18,6 @@
                 isDrawingMode: false,
                 selection: true,
             });
-            // Fabric.js wraps the canvas in a div, removing its position:absolute.
-            // Restore it so the overlay stays on top of the PDF canvas, not below it.
             if (fabricCanvas.wrapperEl) {
                 fabricCanvas.wrapperEl.style.position = 'absolute';
                 fabricCanvas.wrapperEl.style.top = '0';
@@ -28,6 +26,7 @@
             fabricCanvas.freeDrawingBrush.color = document.getElementById('anno-color').value;
             fabricCanvas.freeDrawingBrush.width = parseInt(document.getElementById('anno-stroke').value) || 2;
             setTool(currentTool);
+            loadAnnotationsForPage(window.currentPdfPage() - 1);
         };
 
         // Allow text-overlay placement to pass through Fabric canvas
@@ -37,6 +36,12 @@
             if (wrapper) {
                 wrapper.style.pointerEvents = enabled ? 'none' : '';
             }
+        };
+
+        // Expose so version panel can trigger reload after user change
+        window.reloadAnnotations = function () {
+            if (!fabricCanvas) return;
+            loadAnnotationsForPage(window.currentPdfPage() - 1);
         };
 
         if (!listenersAttached) {
@@ -67,23 +72,70 @@
                     alert('Keine Annotationen vorhanden');
                     return;
                 }
-                const dataUrl = fabricCanvas.toDataURL({ format: 'png' });
+                const user = window.ANNO_USER || 'anonymous';
                 const page = window.currentPdfPage() - 1;
-                fetch(API_BASE + `/api/pdf/${FILE_ID}/annotate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page: page, overlay: dataUrl }),
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.error) { alert(data.error); return; }
-                    fabricCanvas.clear();
-                    window.reloadPdf();
-                    if (window.refreshVersions) window.refreshVersions();
-                });
+                const fabricJson = fabricCanvas.toJSON();
+
+                // Merge with existing annotation data, then PUT
+                fetch(API_BASE + `/api/files/${FILE_ID}/annotations/${user}`)
+                    .then(r => r.json())
+                    .then(existing => {
+                        existing.fabric_pages = existing.fabric_pages || {};
+                        existing.fabric_pages[String(page)] = fabricJson;
+                        return fetch(API_BASE + `/api/files/${FILE_ID}/annotations/${user}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(existing),
+                        });
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.error) { alert(data.error); return; }
+                        if (window.refreshAnnotationPanel) window.refreshAnnotationPanel();
+                    });
             });
         }
     };
+
+    function loadAnnotationsForPage(page) {
+        if (!fabricCanvas) return;
+        const user = window.ANNO_USER || 'anonymous';
+
+        fetch(API_BASE + `/api/files/${FILE_ID}/annotations/${user}`)
+            .then(r => r.json())
+            .then(data => {
+                fabricCanvas.clear();
+                const pageJson = data.fabric_pages && data.fabric_pages[String(page)];
+                if (pageJson) {
+                    fabricCanvas.loadFromJSON(pageJson, () => {
+                        fabricCanvas.getObjects().forEach(obj => obj.set({ selectable: true, evented: true }));
+                        fabricCanvas.renderAll();
+                        addOtherUsersLayers(page, user);
+                    });
+                } else {
+                    addOtherUsersLayers(page, user);
+                }
+            });
+    }
+
+    function addOtherUsersLayers(page, currentUser) {
+        fetch(API_BASE + `/api/files/${FILE_ID}/annotations`)
+            .then(r => r.json())
+            .then(allAnnotations => {
+                allAnnotations.forEach(anno => {
+                    if (anno.user === currentUser) return;
+                    const pageJson = anno.fabric_pages && anno.fabric_pages[String(page)];
+                    if (!pageJson || !pageJson.objects || pageJson.objects.length === 0) return;
+                    fabric.util.enlivenObjects(pageJson.objects, (objects) => {
+                        objects.forEach(obj => {
+                            obj.set({ selectable: false, evented: false, opacity: 0.45 });
+                        });
+                        fabricCanvas.add(...objects);
+                        fabricCanvas.renderAll();
+                    });
+                });
+            });
+    }
 
     function setTool(tool) {
         if (!fabricCanvas) return;

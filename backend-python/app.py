@@ -29,11 +29,13 @@ def create_app(url_prefix: str = ""):
     from routes.pdf_routes import pdf_bp
     from routes.image_routes import image_bp
     from routes.version_routes import version_bp
+    from routes.annotation_routes import annotation_bp
 
     app.register_blueprint(files_bp, url_prefix=prefix)
     app.register_blueprint(pdf_bp, url_prefix=prefix)
     app.register_blueprint(image_bp, url_prefix=prefix)
     app.register_blueprint(version_bp, url_prefix=prefix)
+    app.register_blueprint(annotation_bp, url_prefix=prefix)
 
     # Serve the SPA frontend
     @app.route("/")
@@ -79,11 +81,13 @@ def register_blueprints(app: Flask, url_prefix: str = "/doceditor"):
     from routes.pdf_routes import pdf_bp
     from routes.image_routes import image_bp
     from routes.version_routes import version_bp
+    from routes.annotation_routes import annotation_bp
 
     app.register_blueprint(files_bp, url_prefix=url_prefix)
     app.register_blueprint(pdf_bp, url_prefix=url_prefix)
     app.register_blueprint(image_bp, url_prefix=url_prefix)
     app.register_blueprint(version_bp, url_prefix=url_prefix)
+    app.register_blueprint(annotation_bp, url_prefix=url_prefix)
 
 
 if __name__ == "__main__":

@@ -147,6 +147,57 @@ class PdfProcessor:
         return out.name
 
     @staticmethod
+    def apply_annotation_layers(src_pdf_path: str, layers: list[dict]) -> str:
+        """Render annotation layers onto a PDF and return path to temp result PDF.
+
+        Each layer dict has:
+          type="text": page, text, x, y, font_size, font_name, color ([r,g,b])
+          type="image": page, png (data-url of client-rendered Fabric PNG)
+        """
+        from collections import defaultdict
+        by_page: dict[int, list] = defaultdict(list)
+        for layer in layers:
+            by_page[int(layer["page"])].append(layer)
+
+        pdf = pikepdf.Pdf.open(src_pdf_path)
+        for page_num, page_layers in by_page.items():
+            if page_num >= len(pdf.pages):
+                continue
+            page = pdf.pages[page_num]
+            mediabox = page.mediabox
+            pw = float(mediabox[2]) - float(mediabox[0])
+            ph = float(mediabox[3]) - float(mediabox[1])
+
+            overlay_buf = io.BytesIO()
+            c = rl_canvas.Canvas(overlay_buf, pagesize=(pw, ph))
+            for layer in page_layers:
+                if layer.get("type") == "text":
+                    font_name = layer.get("font_name", "Helvetica")
+                    font_size = float(layer.get("font_size", 12))
+                    color = layer.get("color", [0, 0, 0])
+                    r, g, b = [v / 255.0 if v > 1 else v for v in color]
+                    c.setFont(font_name, font_size)
+                    c.setFillColorRGB(r, g, b)
+                    c.drawString(float(layer["x"]), ph - float(layer["y"]), layer["text"])
+                elif layer.get("type") == "image":
+                    png_data_url = layer["png"]
+                    _, data = png_data_url.split(",", 1)
+                    overlay_bytes = base64.b64decode(data)
+                    img = ImageReader(io.BytesIO(overlay_bytes))
+                    c.drawImage(img, 0, 0, width=pw, height=ph, mask="auto")
+            c.save()
+            overlay_buf.seek(0)
+
+            overlay_pdf = pikepdf.Pdf.open(overlay_buf)
+            page.add_overlay(overlay_pdf.pages[0])
+            overlay_pdf.close()
+
+        out = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        pdf.save(out.name)
+        pdf.close()
+        return out.name
+
+    @staticmethod
     def get_page_count(input_path: str) -> int:
         pdf = pikepdf.Pdf.open(input_path)
         count = len(pdf.pages)

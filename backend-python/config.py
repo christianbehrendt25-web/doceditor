@@ -4,7 +4,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STORAGE_DIR = os.environ.get("DOCEDITOR_STORAGE", os.path.join(BASE_DIR, "storage"))
 
 ORIGINALS_DIR = os.path.join(STORAGE_DIR, "originals")
-VERSIONS_DIR = os.path.join(STORAGE_DIR, "versions")
+VERSIONS_DIR = os.path.join(STORAGE_DIR, "versions")   # legacy, kept for migration
+CURRENT_DIR = os.path.join(STORAGE_DIR, "current")
+ANNOTATIONS_DIR = os.path.join(STORAGE_DIR, "annotations")
 METADATA_DIR = os.path.join(STORAGE_DIR, "metadata")
 AUDIT_LOG_PATH = os.path.join(STORAGE_DIR, "audit_log.jsonl")  # legacy, kept for reference
 
@@ -26,5 +28,5 @@ MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 URL_PREFIX = os.environ.get("DOCEDITOR_PREFIX", "")
 
 # Ensure storage dirs exist
-for d in [ORIGINALS_DIR, VERSIONS_DIR, METADATA_DIR]:
+for d in [ORIGINALS_DIR, CURRENT_DIR, ANNOTATIONS_DIR, METADATA_DIR]:
     os.makedirs(d, exist_ok=True)

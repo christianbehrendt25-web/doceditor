@@ -5,6 +5,7 @@ import uuid
 from typing import BinaryIO
 
 import config
+from models.annotation_store import AnnotationStore
 from models.audit_logger import AuditLogger
 from models.image_enhancer import ImageEnhancer
 from models.image_processor import ImageProcessor
@@ -17,13 +18,6 @@ class FileManager:
 
     @staticmethod
     def upload(filename: str, stream: BinaryIO, user: str = "anonymous") -> dict:
-        """Upload a file from a filename and binary stream (framework-agnostic).
-
-        Args:
-            filename: Original filename (e.g. "document.pdf")
-            stream: Binary stream with file contents
-            user: Username for audit log
-        """
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
         if ext not in config.ALL_ALLOWED:
             raise ValueError(f"File type .{ext} not allowed")
@@ -52,45 +46,41 @@ class FileManager:
         AuditLogger.log("delete", file_id, user)
 
     @staticmethod
-    def get_file_path(file_id: str, version: int | None = None) -> str | None:
-        if version is not None:
-            return VersionStore.get_version_path(file_id, version)
-        return VersionStore.get_latest_version_path(file_id)
+    def get_file_path(file_id: str, version=None) -> str | None:
+        """Return the current (or original) path. version param is ignored."""
+        return VersionStore.get_current_path(file_id)
 
-    # --- PDF operations ---
+    # --- PDF structural operations (write to current/) ---
 
     @staticmethod
-    def pdf_rotate_page(file_id: str, page_num: int, angle: int, user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+    def pdf_rotate_page(file_id: str, page_num: int, angle: int, user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = PdfProcessor.rotate_page(src, page_num, angle)
-        v = VersionStore.create_new_version(file_id, result, "pdf_rotate_page", {"page": page_num, "angle": angle})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("pdf_rotate_page", file_id, user, {"page": page_num, "angle": angle, "version": v})
-        return v
+        AuditLogger.log("pdf_rotate_page", file_id, user, {"page": page_num, "angle": angle})
 
     @staticmethod
-    def pdf_delete_page(file_id: str, page_num: int, user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+    def pdf_delete_page(file_id: str, page_num: int, user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = PdfProcessor.delete_page(src, page_num)
-        v = VersionStore.create_new_version(file_id, result, "pdf_delete_page", {"page": page_num})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("pdf_delete_page", file_id, user, {"page": page_num, "version": v})
-        return v
+        AuditLogger.log("pdf_delete_page", file_id, user, {"page": page_num})
 
     @staticmethod
-    def pdf_reorder_pages(file_id: str, new_order: list[int], user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+    def pdf_reorder_pages(file_id: str, new_order: list[int], user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = PdfProcessor.reorder_pages(src, new_order)
-        v = VersionStore.create_new_version(file_id, result, "pdf_reorder_pages", {"order": new_order})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("pdf_reorder_pages", file_id, user, {"order": new_order, "version": v})
-        return v
+        AuditLogger.log("pdf_reorder_pages", file_id, user, {"order": new_order})
 
     @staticmethod
     def pdf_merge(file_ids: list[str], user: str = "anonymous") -> dict:
         paths = []
         for fid in file_ids:
-            p = VersionStore.get_latest_version_path(fid)
+            p = VersionStore.get_current_path(fid)
             if not p:
                 raise ValueError(f"File not found: {fid}")
             paths.append(p)
@@ -105,13 +95,12 @@ class FileManager:
     @staticmethod
     def images_to_pdf(file_ids: list[str], enhance_options: dict | None = None,
                       user: str = "anonymous") -> dict:
-        """Convert image files to a single PDF with optional enhancement."""
         if enhance_options is None:
             enhance_options = {}
         enhanced_paths = []
         try:
             for fid in file_ids:
-                src = VersionStore.get_latest_version_path(fid)
+                src = VersionStore.get_current_path(fid)
                 if not src:
                     raise ValueError(f"File not found: {fid}")
                 enhanced = ImageEnhancer.enhance(
@@ -137,12 +126,11 @@ class FileManager:
 
     @staticmethod
     def pdf_enhance(file_id: str, enhance_options: dict | None = None,
-                    user: str = "anonymous") -> int:
-        """Render each PDF page as image, apply enhancement, rebuild as new version."""
+                    user: str = "anonymous"):
         import fitz
         if enhance_options is None:
             enhance_options = {}
-        src = VersionStore.get_latest_version_path(file_id)
+        src = VersionStore.get_current_path(file_id)
         if not src:
             raise ValueError(f"File not found: {file_id}")
         doc = fitz.open(src)
@@ -150,7 +138,7 @@ class FileManager:
         try:
             enhanced_paths = []
             for page in doc:
-                mat = fitz.Matrix(2, 2)  # ~150 dpi
+                mat = fitz.Matrix(2, 2)
                 pix = page.get_pixmap(matrix=mat)
                 raw = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
                 raw.close()
@@ -167,95 +155,92 @@ class FileManager:
                 enhanced_paths.append(enhanced)
             result = PdfProcessor.images_to_pdf(enhanced_paths)
             tmp_files.append(result)
-            v = VersionStore.create_new_version(file_id, result, "pdf_enhance", enhance_options)
-            AuditLogger.log("pdf_enhance", file_id, user, {**enhance_options, "version": v})
-            return v
+            VersionStore.update_current(file_id, result)
+            AuditLogger.log("pdf_enhance", file_id, user, enhance_options)
         finally:
             doc.close()
             for p in tmp_files:
                 if os.path.exists(p):
                     os.unlink(p)
 
+    # --- PDF annotation operations (save to AnnotationStore, no PDF modification) ---
+
     @staticmethod
     def pdf_add_text_overlay(file_id: str, page_num: int, text: str, x: float, y: float,
                              font_size: float = 12, font_name: str = "Helvetica",
-                             color: tuple = (0, 0, 0), user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
-        result = PdfProcessor.text_overlay(src, page_num, text, x, y, font_size, font_name, color)
-        v = VersionStore.create_new_version(file_id, result, "pdf_text_overlay",
-                                            {"page": page_num, "text": text, "x": x, "y": y})
-        os.unlink(result)
-        AuditLogger.log("pdf_text_overlay", file_id, user, {"page": page_num, "version": v})
-        return v
+                             color: tuple = (0, 0, 0), user: str = "anonymous"):
+        data = AnnotationStore.get(file_id, user)
+        data.setdefault("text_overlays", []).append({
+            "page": page_num, "text": text, "x": x, "y": y,
+            "font_size": font_size, "font_name": font_name, "color": list(color),
+        })
+        AnnotationStore.save(file_id, user, data)
+        AuditLogger.log("pdf_text_overlay", file_id, user, {"page": page_num, "text": text})
 
     @staticmethod
-    def pdf_add_annotations(file_id: str, page_num: int, overlay_data_url: str,
-                            user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
-        result = PdfProcessor.annotate(src, page_num, overlay_data_url)
-        v = VersionStore.create_new_version(file_id, result, "pdf_annotate", {"page": page_num})
-        os.unlink(result)
-        AuditLogger.log("pdf_annotate", file_id, user, {"page": page_num, "version": v})
-        return v
+    def pdf_add_annotations(file_id: str, page_num: int, fabric_json: dict,
+                            user: str = "anonymous"):
+        data = AnnotationStore.get(file_id, user)
+        data.setdefault("fabric_pages", {})[str(page_num)] = fabric_json
+        AnnotationStore.save(file_id, user, data)
+        AuditLogger.log("pdf_annotate", file_id, user, {"page": page_num})
 
-    # --- Image operations ---
+    # --- Image structural operations (write to current/) ---
 
     @staticmethod
     def image_crop(file_id: str, left: int, top: int, right: int, bottom: int,
-                   user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+                   user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = ImageProcessor.crop(src, left, top, right, bottom)
-        v = VersionStore.create_new_version(file_id, result, "image_crop",
-                                            {"left": left, "top": top, "right": right, "bottom": bottom})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("image_crop", file_id, user, {"version": v})
-        return v
+        AuditLogger.log("image_crop", file_id, user,
+                        {"left": left, "top": top, "right": right, "bottom": bottom})
 
     @staticmethod
-    def image_resize(file_id: str, width: int, height: int, user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+    def image_resize(file_id: str, width: int, height: int, user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = ImageProcessor.resize(src, width, height)
-        v = VersionStore.create_new_version(file_id, result, "image_resize", {"width": width, "height": height})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("image_resize", file_id, user, {"width": width, "height": height, "version": v})
-        return v
+        AuditLogger.log("image_resize", file_id, user, {"width": width, "height": height})
 
     @staticmethod
-    def image_rotate(file_id: str, angle: float, user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+    def image_rotate(file_id: str, angle: float, user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = ImageProcessor.rotate(src, angle)
-        v = VersionStore.create_new_version(file_id, result, "image_rotate", {"angle": angle})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("image_rotate", file_id, user, {"angle": angle, "version": v})
-        return v
+        AuditLogger.log("image_rotate", file_id, user, {"angle": angle})
 
     @staticmethod
     def image_adjust(file_id: str, brightness: float = 1.0, contrast: float = 1.0,
-                     saturation: float = 1.0, user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+                     saturation: float = 1.0, user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = ImageProcessor.adjust(src, brightness, contrast, saturation)
-        v = VersionStore.create_new_version(file_id, result, "image_adjust",
-                                            {"brightness": brightness, "contrast": contrast, "saturation": saturation})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("image_adjust", file_id, user, {"version": v})
-        return v
+        AuditLogger.log("image_adjust", file_id, user,
+                        {"brightness": brightness, "contrast": contrast, "saturation": saturation})
 
     @staticmethod
-    def image_annotate(file_id: str, overlay_data_url: str, user: str = "anonymous") -> int:
-        src = VersionStore.get_latest_version_path(file_id)
+    def image_annotate(file_id: str, overlay_data_url: str, user: str = "anonymous"):
+        src = VersionStore.get_current_path(file_id)
         result = ImageProcessor.annotate(src, overlay_data_url)
-        v = VersionStore.create_new_version(file_id, result, "image_annotate", {})
+        VersionStore.update_current(file_id, result)
         os.unlink(result)
-        AuditLogger.log("image_annotate", file_id, user, {"version": v})
-        return v
+        AuditLogger.log("image_annotate", file_id, user)
 
-    # --- Version operations ---
+    # --- Reset ---
 
     @staticmethod
-    def revert(file_id: str, version: int, user: str = "anonymous") -> int:
-        path = VersionStore.get_version_path(file_id, version)
-        if not path:
-            raise ValueError(f"Version {version} not found for {file_id}")
-        v = VersionStore.create_new_version(file_id, path, "revert", {"reverted_to": version})
-        AuditLogger.log("revert", file_id, user, {"reverted_to": version, "new_version": v})
-        return v
+    def reset_to_original(file_id: str, user: str = "anonymous"):
+        """Delete current/ file and all annotation layers, reverting to original."""
+        meta = VersionStore.get_metadata(file_id)
+        if not meta:
+            raise ValueError(f"File not found: {file_id}")
+        curr = os.path.join(config.CURRENT_DIR, f"{file_id}.{meta['ext']}")
+        if os.path.exists(curr):
+            os.remove(curr)
+        AnnotationStore.delete_all(file_id)
+        AuditLogger.log("reset_to_original", file_id, user)

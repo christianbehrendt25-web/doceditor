@@ -4,14 +4,14 @@ from flask import Blueprint, jsonify, request, send_file
 
 from models.file_manager import FileManager
 from models.pdf_processor import PdfProcessor
+from models.version_store import VersionStore
 
 pdf_bp = Blueprint("pdf", __name__)
 
 
 @pdf_bp.route("/api/pdf/<file_id>/serve")
 def serve_pdf(file_id):
-    version = request.args.get("version", None, type=int)
-    path = FileManager.get_file_path(file_id, version)
+    path = VersionStore.get_current_path(file_id)
     if not path or not os.path.exists(path):
         return jsonify({"error": "Not found"}), 404
     return send_file(path, mimetype="application/pdf")
@@ -19,7 +19,7 @@ def serve_pdf(file_id):
 
 @pdf_bp.route("/api/pdf/<file_id>/page-count")
 def page_count(file_id):
-    path = FileManager.get_file_path(file_id)
+    path = VersionStore.get_current_path(file_id)
     if not path:
         return jsonify({"error": "Not found"}), 404
     count = PdfProcessor.get_page_count(path)
@@ -31,8 +31,8 @@ def rotate_page(file_id):
     data = request.get_json()
     user = data.get("user", "anonymous")
     try:
-        v = FileManager.pdf_rotate_page(file_id, data["page"], data.get("angle", 90), user)
-        return jsonify({"version": v})
+        FileManager.pdf_rotate_page(file_id, data["page"], data.get("angle", 90), user)
+        return jsonify({"ok": True})
     except (KeyError, ValueError, IndexError) as e:
         return jsonify({"error": str(e)}), 400
 
@@ -42,8 +42,8 @@ def delete_page(file_id):
     data = request.get_json()
     user = data.get("user", "anonymous")
     try:
-        v = FileManager.pdf_delete_page(file_id, data["page"], user)
-        return jsonify({"version": v})
+        FileManager.pdf_delete_page(file_id, data["page"], user)
+        return jsonify({"ok": True})
     except (KeyError, ValueError, IndexError) as e:
         return jsonify({"error": str(e)}), 400
 
@@ -53,8 +53,8 @@ def reorder_pages(file_id):
     data = request.get_json()
     user = data.get("user", "anonymous")
     try:
-        v = FileManager.pdf_reorder_pages(file_id, data["order"], user)
-        return jsonify({"version": v})
+        FileManager.pdf_reorder_pages(file_id, data["order"], user)
+        return jsonify({"ok": True})
     except (KeyError, ValueError, IndexError) as e:
         return jsonify({"error": str(e)}), 400
 
@@ -75,14 +75,14 @@ def text_overlay(file_id):
     data = request.get_json()
     user = data.get("user", "anonymous")
     try:
-        v = FileManager.pdf_add_text_overlay(
+        FileManager.pdf_add_text_overlay(
             file_id, data["page"], data["text"], data["x"], data["y"],
             font_size=data.get("font_size", 12),
             font_name=data.get("font_name", "Helvetica"),
             color=tuple(data.get("color", [0, 0, 0])),
             user=user,
         )
-        return jsonify({"version": v})
+        return jsonify({"ok": True})
     except (KeyError, ValueError) as e:
         return jsonify({"error": str(e)}), 400
 
@@ -107,18 +107,19 @@ def enhance_pdf(file_id):
     data = request.get_json() or {}
     user = data.get("user", "anonymous")
     try:
-        v = FileManager.pdf_enhance(file_id, data.get("enhance", {}), user)
-        return jsonify({"version": v})
+        FileManager.pdf_enhance(file_id, data.get("enhance", {}), user)
+        return jsonify({"ok": True})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
 
 @pdf_bp.route("/api/pdf/<file_id>/annotate", methods=["POST"])
 def annotate_pdf(file_id):
+    """Save a Fabric.js canvas JSON for a page into the annotation store."""
     data = request.get_json()
     user = data.get("user", "anonymous")
     try:
-        v = FileManager.pdf_add_annotations(file_id, data["page"], data["overlay"], user)
-        return jsonify({"version": v})
+        FileManager.pdf_add_annotations(file_id, data["page"], data.get("fabric_json", {}), user)
+        return jsonify({"ok": True})
     except (KeyError, ValueError) as e:
         return jsonify({"error": str(e)}), 400
