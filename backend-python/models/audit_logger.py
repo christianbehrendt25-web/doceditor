@@ -1,39 +1,32 @@
 import json
-import threading
 from datetime import datetime, timezone
 
-import config
+from models.database import get_session
+from models.db_models import AuditLogEntry
 
 
 class AuditLogger:
-    _lock = threading.Lock()
-
     @classmethod
     def log(cls, action: str, file_id: str = "", user: str = "anonymous", details: dict | None = None):
-        entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "user": user,
-            "action": action,
-            "file_id": file_id,
-            "details": details or {},
-        }
-        with cls._lock:
-            with open(config.AUDIT_LOG_PATH, "a") as f:
-                f.write(json.dumps(entry) + "\n")
+        session = get_session()
+        entry = AuditLogEntry(
+            timestamp=datetime.now(timezone.utc),
+            user=user,
+            action=action,
+            file_id=file_id,
+            details=json.dumps(details or {}),
+        )
+        session.add(entry)
+        session.commit()
+        session.close()
 
     @classmethod
     def get_log(cls, limit: int = 100, file_id: str = "") -> list[dict]:
-        entries = []
-        try:
-            with open(config.AUDIT_LOG_PATH, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    entry = json.loads(line)
-                    if file_id and entry.get("file_id") != file_id:
-                        continue
-                    entries.append(entry)
-        except FileNotFoundError:
-            pass
-        return entries[-limit:]
+        session = get_session()
+        query = session.query(AuditLogEntry)
+        if file_id:
+            query = query.filter(AuditLogEntry.file_id == file_id)
+        query = query.order_by(AuditLogEntry.id.desc()).limit(limit)
+        entries = [e.to_dict() for e in query.all()]
+        session.close()
+        return list(reversed(entries))

@@ -18,6 +18,7 @@ backend-python/storage/originals/*
 backend-python/storage/versions/*
 backend-python/storage/metadata/*
 backend-python/storage/audit_log.jsonl
+backend-python/storage/*.db
 !backend-python/storage/.gitkeep
 !backend-python/storage/originals/.gitkeep
 !backend-python/storage/versions/.gitkeep

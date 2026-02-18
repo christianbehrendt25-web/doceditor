@@ -18,6 +18,11 @@ def create_app(url_prefix: str = ""):
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_SIZE
 
+    # Initialize database
+    from models.database import init_db
+    from models import db_models  # noqa: F401 - ensure models are registered
+    init_db(config.DATABASE_URL)
+
     prefix = url_prefix or config.URL_PREFIX
 
     from routes.files import files_bp

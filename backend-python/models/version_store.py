@@ -4,13 +4,11 @@ import shutil
 from datetime import datetime, timezone
 
 import config
+from models.database import get_session
+from models.db_models import File, FileVersion
 
 
 class VersionStore:
-    @staticmethod
-    def _meta_path(file_id: str) -> str:
-        return os.path.join(config.METADATA_DIR, f"{file_id}.json")
-
     @staticmethod
     def _versions_dir(file_id: str) -> str:
         d = os.path.join(config.VERSIONS_DIR, file_id)
@@ -19,38 +17,53 @@ class VersionStore:
 
     @classmethod
     def create_metadata(cls, file_id: str, original_name: str, file_type: str, ext: str) -> dict:
-        meta = {
-            "file_id": file_id,
-            "original_name": original_name,
-            "file_type": file_type,
-            "ext": ext,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "current_version": 0,
-            "versions": [
-                {
-                    "version": 0,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                    "action": "upload",
-                    "details": {},
-                }
-            ],
-        }
-        with open(cls._meta_path(file_id), "w") as f:
-            json.dump(meta, f, indent=2)
-        return meta
+        session = get_session()
+        now = datetime.now(timezone.utc)
+        f = File(
+            file_id=file_id,
+            original_name=original_name,
+            file_type=file_type,
+            ext=ext,
+            created_at=now,
+            current_version=0,
+        )
+        v = FileVersion(
+            file_id=file_id,
+            version=0,
+            created_at=now,
+            action="upload",
+            details="{}",
+        )
+        session.add(f)
+        session.add(v)
+        session.commit()
+        result = f.to_dict()
+        session.close()
+        return result
 
     @classmethod
     def get_metadata(cls, file_id: str) -> dict | None:
-        path = cls._meta_path(file_id)
-        if not os.path.exists(path):
+        session = get_session()
+        f = session.get(File, file_id)
+        if not f:
+            session.close()
             return None
-        with open(path, "r") as f:
-            return json.load(f)
+        result = f.to_dict()
+        session.close()
+        return result
 
     @classmethod
     def save_metadata(cls, file_id: str, meta: dict):
-        with open(cls._meta_path(file_id), "w") as f:
-            json.dump(meta, f, indent=2)
+        """Update file metadata from dict. Kept for compatibility."""
+        session = get_session()
+        f = session.get(File, file_id)
+        if not f:
+            session.close()
+            return
+        f.original_name = meta.get("original_name", f.original_name)
+        f.current_version = meta.get("current_version", f.current_version)
+        session.commit()
+        session.close()
 
     @classmethod
     def get_latest_version_path(cls, file_id: str) -> str | None:
@@ -74,49 +87,53 @@ class VersionStore:
     @classmethod
     def create_new_version(cls, file_id: str, source_path: str, action: str, details: dict | None = None) -> int:
         """Copy source_path as a new version. Returns the new version number."""
-        meta = cls.get_metadata(file_id)
-        if not meta:
+        session = get_session()
+        f = session.get(File, file_id)
+        if not f:
+            session.close()
             raise ValueError(f"Unknown file: {file_id}")
-        new_version = meta["current_version"] + 1
-        dest = os.path.join(cls._versions_dir(file_id), f"v{new_version}.{meta['ext']}")
+
+        new_version = f.current_version + 1
+        dest = os.path.join(cls._versions_dir(file_id), f"v{new_version}.{f.ext}")
         shutil.copy2(source_path, dest)
-        meta["current_version"] = new_version
-        meta["versions"].append({
-            "version": new_version,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "action": action,
-            "details": details or {},
-        })
-        cls.save_metadata(file_id, meta)
+
+        f.current_version = new_version
+        v = FileVersion(
+            file_id=file_id,
+            version=new_version,
+            created_at=datetime.now(timezone.utc),
+            action=action,
+            details=json.dumps(details or {}),
+        )
+        session.add(v)
+        session.commit()
+        session.close()
         return new_version
 
     @classmethod
     def delete_file(cls, file_id: str):
-        meta = cls.get_metadata(file_id)
-        if not meta:
+        session = get_session()
+        f = session.get(File, file_id)
+        if not f:
+            session.close()
             return
-        # Remove original
-        orig = os.path.join(config.ORIGINALS_DIR, f"{file_id}.{meta['ext']}")
+        ext = f.ext
+        session.delete(f)  # cascades to versions
+        session.commit()
+        session.close()
+
+        # Remove files from filesystem
+        orig = os.path.join(config.ORIGINALS_DIR, f"{file_id}.{ext}")
         if os.path.exists(orig):
             os.remove(orig)
-        # Remove versions dir
         vdir = os.path.join(config.VERSIONS_DIR, file_id)
         if os.path.exists(vdir):
             shutil.rmtree(vdir)
-        # Remove metadata
-        mp = cls._meta_path(file_id)
-        if os.path.exists(mp):
-            os.remove(mp)
 
     @classmethod
     def list_files(cls) -> list[dict]:
-        files = []
-        for fname in os.listdir(config.METADATA_DIR):
-            if not fname.endswith(".json"):
-                continue
-            file_id = fname[:-5]
-            meta = cls.get_metadata(file_id)
-            if meta:
-                files.append(meta)
-        files.sort(key=lambda m: m["created_at"], reverse=True)
-        return files
+        session = get_session()
+        files = session.query(File).order_by(File.created_at.desc()).all()
+        result = [f.to_dict() for f in files]
+        session.close()
+        return result

@@ -6,7 +6,13 @@ STORAGE_DIR = os.environ.get("DOCEDITOR_STORAGE", os.path.join(BASE_DIR, "storag
 ORIGINALS_DIR = os.path.join(STORAGE_DIR, "originals")
 VERSIONS_DIR = os.path.join(STORAGE_DIR, "versions")
 METADATA_DIR = os.path.join(STORAGE_DIR, "metadata")
-AUDIT_LOG_PATH = os.path.join(STORAGE_DIR, "audit_log.jsonl")
+AUDIT_LOG_PATH = os.path.join(STORAGE_DIR, "audit_log.jsonl")  # legacy, kept for reference
+
+# Database URL: SQLite (default), PostgreSQL, MySQL via DATABASE_URL env var
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "sqlite:///" + os.path.join(STORAGE_DIR, "doceditor.db"),
+)
 
 ALLOWED_EXTENSIONS = {
     "pdf": ["pdf"],
