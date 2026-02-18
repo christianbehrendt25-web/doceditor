@@ -5,6 +5,7 @@ from typing import BinaryIO
 
 import config
 from models.audit_logger import AuditLogger
+from models.image_enhancer import ImageEnhancer
 from models.image_processor import ImageProcessor
 from models.pdf_processor import PdfProcessor
 from models.version_store import VersionStore
@@ -99,6 +100,39 @@ class FileManager:
         meta = VersionStore.create_metadata(new_id, "merged.pdf", "pdf", "pdf")
         AuditLogger.log("pdf_merge", new_id, user, {"source_files": file_ids})
         return meta
+
+    @staticmethod
+    def images_to_pdf(file_ids: list[str], enhance_options: dict | None = None,
+                      user: str = "anonymous") -> dict:
+        """Convert image files to a single PDF with optional enhancement."""
+        if enhance_options is None:
+            enhance_options = {}
+        enhanced_paths = []
+        try:
+            for fid in file_ids:
+                src = VersionStore.get_latest_version_path(fid)
+                if not src:
+                    raise ValueError(f"File not found: {fid}")
+                enhanced = ImageEnhancer.enhance(
+                    src,
+                    deskew=enhance_options.get("deskew", True),
+                    sharpen=enhance_options.get("sharpen", True),
+                    contrast=enhance_options.get("contrast", True),
+                    threshold=enhance_options.get("threshold", False),
+                )
+                enhanced_paths.append(enhanced)
+
+            result = PdfProcessor.images_to_pdf(enhanced_paths)
+            new_id = uuid.uuid4().hex[:12]
+            dest = os.path.join(config.ORIGINALS_DIR, f"{new_id}.pdf")
+            shutil.move(result, dest)
+            meta = VersionStore.create_metadata(new_id, "photo-to-pdf.pdf", "pdf", "pdf")
+            AuditLogger.log("images_to_pdf", new_id, user, {"source_files": file_ids})
+            return meta
+        finally:
+            for p in enhanced_paths:
+                if os.path.exists(p):
+                    os.unlink(p)
 
     @staticmethod
     def pdf_add_text_overlay(file_id: str, page_num: int, text: str, x: float, y: float,

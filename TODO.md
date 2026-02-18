@@ -1,9 +1,8 @@
 # DocEditor - TODO
 
-## 1. DB-Backend (SQLAlchemy) ← AKTUELL
-VersionStore + AuditLogger auf SQLAlchemy umstellen.
+## 1. ~~DB-Backend (SQLAlchemy)~~ ✔ (v0.1.0)
+VersionStore + AuditLogger auf SQLAlchemy umgestellt.
 Universell: SQLite (Default/Dev), PostgreSQL, MySQL ueber DATABASE_URL.
-Dateien bleiben im Dateisystem, nur Metadaten + Audit-Log in die DB.
 
 ## 2. Foto-zu-PDF Konvertierung
 Fotos von Dokumenten in PDF wandeln mit Bildverbesserung:
@@ -31,8 +30,10 @@ Spaeter: Highlight-Marker, Stempel, Linien, Radierer.
 Einfache Stufen: Entwurf → In Bearbeitung → Fertig.
 Spaeter ggf. Workflow mit Freigabe/Review.
 
-## 7. Thumbnails in Dateiliste
-Vorschaubilder statt nur Dateinamen in der Dateiuebersicht anzeigen.
+## 7. Thumbnail-API-Endpunkt
+API-Endpunkt `/api/files/{id}/thumbnail` fuer Vorschaubilder.
+Hauptapp kann diesen Endpunkt in ihrer eigenen Dateiliste nutzen.
+Dateiverwaltung und Ordnerstruktur sind Aufgabe der Hauptapp.
 
 ## 8. PDF-Seitenleiste mit Miniatur-Thumbnails
 Alle Seiten eines PDFs als kleine Vorschaubilder in einer Seitenleiste.

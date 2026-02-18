@@ -8,7 +8,10 @@
         const uploadStatus = document.getElementById('upload-status');
         const mergeBtn = document.getElementById('merge-btn');
         const mergeSelection = document.getElementById('merge-selection');
+        const photoPdfBtn = document.getElementById('photo-pdf-btn');
+        const photoPdfSelection = document.getElementById('photo-pdf-selection');
         let mergeIds = [];
+        let photoPdfIds = [];
 
         if (!initialized) {
             initialized = true;
@@ -46,6 +49,36 @@
                     else loadFiles();
                 });
             });
+
+            photoPdfBtn.addEventListener('click', () => {
+                photoPdfBtn.disabled = true;
+                photoPdfBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Konvertiere...';
+                const enhance = {
+                    deskew: document.getElementById('enhance-deskew').checked,
+                    sharpen: document.getElementById('enhance-sharpen').checked,
+                    contrast: document.getElementById('enhance-contrast').checked,
+                    threshold: document.getElementById('enhance-threshold').checked,
+                };
+                fetch(API_BASE + '/api/photo-to-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_ids: photoPdfIds, enhance }),
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        loadFiles();
+                        window.location.hash = '#/pdf/' + data.file_id;
+                    }
+                })
+                .catch(() => alert('Fehler bei der Konvertierung'))
+                .finally(() => {
+                    photoPdfBtn.disabled = false;
+                    photoPdfBtn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Foto → PDF';
+                });
+            });
         }
 
         loadFiles();
@@ -56,6 +89,7 @@
                 .then(files => {
                     fileList.innerHTML = '';
                     mergeSelection.innerHTML = '';
+                    photoPdfSelection.innerHTML = '';
                     files.forEach(f => {
                         const icon = f.file_type === 'pdf' ? 'bi-file-earmark-pdf text-danger' : 'bi-file-earmark-image text-success';
                         const viewHash = f.file_type === 'pdf' ? `#/pdf/${f.file_id}` : `#/image/${f.file_id}`;
@@ -81,6 +115,13 @@
                                 <label class="form-check-label" for="merge-${f.file_id}">${f.original_name}</label>`;
                             mergeSelection.appendChild(cb);
                         }
+                        if (f.file_type === 'image') {
+                            const cb = document.createElement('div');
+                            cb.className = 'form-check';
+                            cb.innerHTML = `<input class="form-check-input photo-pdf-cb" type="checkbox" value="${f.file_id}" id="photo-${f.file_id}">
+                                <label class="form-check-label" for="photo-${f.file_id}">${f.original_name}</label>`;
+                            photoPdfSelection.appendChild(cb);
+                        }
                     });
 
                     document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -97,6 +138,13 @@
                         cb.addEventListener('change', () => {
                             mergeIds = [...document.querySelectorAll('.merge-cb:checked')].map(c => c.value);
                             mergeBtn.disabled = mergeIds.length < 2;
+                        });
+                    });
+
+                    document.querySelectorAll('.photo-pdf-cb').forEach(cb => {
+                        cb.addEventListener('change', () => {
+                            photoPdfIds = [...document.querySelectorAll('.photo-pdf-cb:checked')].map(c => c.value);
+                            photoPdfBtn.disabled = photoPdfIds.length < 1;
                         });
                     });
                 });

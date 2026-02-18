@@ -381,6 +381,53 @@ paths:
         "400":
           $ref: "#/components/responses/Error400"
 
+  /api/photo-to-pdf:
+    post:
+      summary: Convert photos to PDF with optional image enhancement
+      operationId: photoToPdf
+      tags: [PDF]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_ids]
+              properties:
+                file_ids:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  description: Image file IDs to convert
+                enhance:
+                  type: object
+                  properties:
+                    deskew:
+                      type: boolean
+                      default: true
+                    sharpen:
+                      type: boolean
+                      default: true
+                    contrast:
+                      type: boolean
+                      default: true
+                    threshold:
+                      type: boolean
+                      default: false
+                user:
+                  type: string
+                  default: anonymous
+      responses:
+        "201":
+          description: PDF created from photos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileMeta"
+        "400":
+          $ref: "#/components/responses/Error400"
+
   /api/pdf/{fileId}/text-overlay:
     post:
       summary: Add text overlay to PDF page

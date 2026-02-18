@@ -87,6 +87,21 @@ def text_overlay(file_id):
         return jsonify({"error": str(e)}), 400
 
 
+@pdf_bp.route("/api/photo-to-pdf", methods=["POST"])
+def photo_to_pdf():
+    data = request.get_json()
+    user = data.get("user", "anonymous")
+    try:
+        file_ids = data["file_ids"]
+        if not file_ids:
+            return jsonify({"error": "No files specified"}), 400
+        enhance = data.get("enhance", {})
+        meta = FileManager.images_to_pdf(file_ids, enhance, user)
+        return jsonify(meta), 201
+    except (KeyError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @pdf_bp.route("/api/pdf/<file_id>/annotate", methods=["POST"])
 def annotate_pdf(file_id):
     data = request.get_json()

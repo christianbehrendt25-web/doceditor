@@ -1,4 +1,5 @@
 flask>=3.0
+opencv-python-headless>=4.0
 pikepdf>=8.0
 Pillow>=10.0
 reportlab>=4.0

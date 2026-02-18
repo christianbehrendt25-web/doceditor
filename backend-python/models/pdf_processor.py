@@ -3,8 +3,10 @@ import io
 import tempfile
 
 import pikepdf
-from reportlab.lib.pagesizes import letter
+from PIL import Image
+from reportlab.lib.pagesizes import A4, letter
 from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as rl_canvas
 
 
@@ -122,6 +124,26 @@ class PdfProcessor:
         pdf.save(out.name)
         pdf.close()
         overlay_pdf.close()
+        return out.name
+
+    @staticmethod
+    def images_to_pdf(image_paths: list[str]) -> str:
+        """One image per page, scaled to fit A4. Returns path to temp PDF."""
+        a4_w, a4_h = A4
+        out = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        c = rl_canvas.Canvas(out.name, pagesize=A4)
+        for path in image_paths:
+            img = Image.open(path)
+            iw, ih = img.size
+            scale = min(a4_w / iw, a4_h / ih)
+            draw_w = iw * scale
+            draw_h = ih * scale
+            x = (a4_w - draw_w) / 2
+            y = (a4_h - draw_h) / 2
+            reader = ImageReader(path)
+            c.drawImage(reader, x, y, width=draw_w, height=draw_h)
+            c.showPage()
+        c.save()
         return out.name
 
     @staticmethod
