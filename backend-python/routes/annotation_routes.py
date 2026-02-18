@@ -20,7 +20,9 @@ def get_annotation(file_id, user):
 
 @annotation_bp.route("/api/files/<file_id>/annotations/<user>", methods=["PUT"])
 def save_annotation(file_id, user):
-    data = request.get_json() or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Body must be a JSON object"}), 400
     AnnotationStore.save(file_id, user, data)
     return jsonify({"ok": True})
 
