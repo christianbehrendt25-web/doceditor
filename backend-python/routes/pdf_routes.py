@@ -74,6 +74,8 @@ def merge_pdfs():
 def text_overlay(file_id):
     data = request.get_json()
     user = data.get("user", "anonymous")
+    if not str(data.get("text", "")).strip():
+        return jsonify({"error": "text must not be empty"}), 400
     try:
         FileManager.pdf_add_text_overlay(
             file_id, data["page"], data["text"], data["x"], data["y"],
